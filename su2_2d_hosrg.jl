@@ -17,20 +17,18 @@ function polar2g(ζ, φ, χ)
     [α -conj(β); β conj(α)]
 end
 
-function gauge(T, Dcut, s)
+function gauge(T, D_cut, s)
     if s == 'l'
         @tensor M_l[a, A, c, C] := (T[z, b, x, a] * T[w, b, x, c]) * (T[y, B, w, C] * T[y, B, z, A])
         D = size(M_l, 1)
         M_l = reshape(M_l, (D ^ 2, D ^ 2))
         M_l = (M_l + M_l') / 2
 
-        vl, Ul = eigen(M_l)
-        D_new = min(D ^ 2, Dcut)
+        vl, Ul = eigen(M_l; sortby = x -> -x)
+        D_new = min(D ^ 2, D_cut)
         inds_new = collect(1:D_new)
-        p = sortperm(vl, rev = true)
-        TrunErrLeft = 1.0 - sum(vl[p[inds_new]]) / sum(vl)
-        vl = vl[p[inds_new]]
-        Ul = Ul[:, p[inds_new]]
+        TrunErrLeft = 1.0 - sum(vl[inds_new]) / sum(vl)
+        Ul = Ul[:, inds_new]
         Ul = reshape(Ul, (D, D, D_new))
         Ul, TrunErrLeft
     elseif s == 'r'
@@ -39,24 +37,22 @@ function gauge(T, Dcut, s)
         M_r = reshape(M_r, (D ^ 2, D ^ 2))
         M_r = (M_r + M_r') / 2
 
-        vr, Ur = eigen(M_r)
-        D_new = min(D ^ 2, Dcut)
+        vr, Ur = eigen(M_r; sortby = x -> -x)
+        D_new = min(D ^ 2, D_cut)
         inds_new = collect(1:D_new)
-        p = sortperm(vr, rev = true)
-        TrunErrRight = 1.0 - sum(vr[p[inds_new]]) / sum(vr)
-        vr = vr[p[inds_new]]
-        Ur = Ur[:, p[inds_new]]
+        TrunErrRight = 1.0 - sum(vr[inds_new]) / sum(vr)
+        Ur = Ur[:, inds_new]
         Ur = reshape(Ur, (D, D, D_new))
         Ur, TrunErrRight
     end
 end
 
-function hotrg(T, Dcut, ::Val{M})
+function hotrg(T, D, ::Val{M})
     lnZ = 0.0
     Us = Matrix{Float64}[]
     for k in 1:M
-        Ul, TrunErrLeft = gauge(T, Dcut, 'l')
-        Ur, TrunErrRight = gauge(T, Dcut, 'r')
+        Ul, TrunErrLeft = gauge(T, D, 'l')
+        Ur, TrunErrRight = gauge(T, D, 'r')
         U = TrunErrLeft < TrunErrRight ? Ul : Ur
         push!(Us, reshape(U, :, size(U, 3)))
         @tensoropt T[z, y, w, x] := T[o, b, x, a] * U[a, A, z] * T[y, B, o, A] * U[b, B, w]
@@ -110,9 +106,11 @@ function main(::Val{M}) where M
         T[range, range, range, range] .= (λk[k] ^ 2 / k) .* reshape(Tk, k², k², k², k²)
         k_begin += k²
     end
-    Ud = randn(D, D_max)
-    U, S, V = svd(Ud)
-    Ud .= U * V'
+    @tensor ρ[a, b] := T[a, i, j, k] * T[b, i, j, k]
+    ρ = (ρ + ρ') / 2
+
+    _, vec = eigen(ρ; sortby = x -> -x)
+    Ud = vec[:, 1:D_max]
     temp1 = Ud' * reshape(T, D, D ^ 3)
     temp2 = Ud' * reshape(transpose(temp1), D, D ^ 2 * D_max)
     temp3 = Ud' * reshape(transpose(temp2), D, D * D_max ^ 2)
