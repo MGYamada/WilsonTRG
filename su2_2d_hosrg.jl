@@ -74,21 +74,18 @@ end
 
 function hosrg(T, D, Us::Tuple)
     lnZ = 0.0
-    for i in 1:M
-        U = reshape(Us[i], D, D, :)
+    for k in 1:M
+        U = reshape(Us[k], D, D, :)
         @tensoropt T[w,x,z,y] := T[x,a,o,b] * U[a,A,z] * T[o,A,y,B] * U[b,B,w]
         f = norm(T)
-        lnZ += log(f) / 2^i
-        T = T / f
+        lnZ += log(f) / (2 ^ k)
+        T /= f
     end
-    sum = 0.0;
-    D1 = size(T,1)
-    D2 = size(T,2)
-    for x = 1:D1, y = 1:D2
-        sum += T[x,y,x,y]
+    sum = 0.0
+    for x in 1:size(T, 1), y in 1:size(T, 2)
+        sum += T[x, y, x, y]
     end
-    lnZ += log(sum)/2^M
-    lnZ
+    lnZ += log(sum) / (2 ^ M)
 end
 
 function main(::Val{M}) where M
@@ -121,6 +118,7 @@ function main(::Val{M}) where M
     temp3 = Ud' * reshape(transpose(temp2), D, D * D_max ^ 2)
     temp4 = Ud' * reshape(transpose(temp3), D, D_max ^ 3)
     lnZ, Us = hotrg(reshape(Array(temp4), D_max, D_max, D_max, D_max), D_max, Val(M))
+    println("HOTRG: ", lnZ)
     for i in 1:N_sweep
         lnZ, (dUd, dUs...) = withgradient(Ud, Us...) do Ud, Us...
             temp1 = Ud' * reshape(T, D, D ^ 3)
@@ -129,7 +127,7 @@ function main(::Val{M}) where M
             temp4 = Ud' * reshape(transpose(temp3), D, D_max ^ 3)
             hosrg(reshape(Array(temp4), D_max, D_max, D_max, D_max), D_max, Us)
         end
-        println(lnZ)
+        println("HOSRG(", i, "): ", lnZ)
         U, S, V = svd(dUd)
         Ud .= U * V'
         for i in 1:M
