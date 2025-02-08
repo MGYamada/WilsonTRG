@@ -33,6 +33,7 @@ function gauge(T, Dcut, s)
         D = size(M_r, 1)
         M_r = reshape(M_r, (D ^ 2, D ^ 2))
         M_r = (M_r + M_r') / 2
+
         vr, Ur = eigen(M_r)
         D_new = min(D ^ 2, Dcut)
         inds_new = collect(1:D_new)
