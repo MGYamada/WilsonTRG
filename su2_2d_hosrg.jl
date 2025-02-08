@@ -17,66 +17,11 @@ function polar2g(ζ, φ, χ)
     [α -conj(β); β conj(α)]
 end
 
-function gauge(T, Dcut, s)
-    if s == 'l'
-        @tensor M_l[a, A, c, C] := (T[z, b, x, a] * T[w, b, x, c]) * (T[y, B, w, C] * T[y, B, z, A])
-        D = size(M_l, 1)
-        M_l = reshape(M_l, (D ^ 2, D ^ 2))
-        M_l = (M_l + M_l') / 2
-
-        vl, Ul = eigen(M_l)
-        D_new = min(D ^ 2, Dcut)
-        inds_new = collect(1:D_new)
-        p = sortperm(vl, rev = true)
-        TrunErrLeft = 1.0 - sum(vl[p[inds_new]]) / sum(vl)
-        vl = vl[p[inds_new]]
-        Ul = Ul[:, p[inds_new]]
-        Ul = reshape(Ul, (D, D, D_new))
-        Ul, TrunErrLeft
-    elseif s == 'r'
-        @tensor M_r[a, A, c, C] := (T[z, a, x, b] * T[w, c, x, b]) * (T[y, C, w, B] * T[y, A, z, B])
-        D = size(M_r, 1)
-        M_r = reshape(M_r, (D ^ 2, D ^ 2))
-        M_r = (M_r + M_r') / 2
-
-        vr, Ur = eigen(M_r)
-        D_new = min(D ^ 2, Dcut)
-        inds_new = collect(1:D_new)
-        p = sortperm(vr, rev = true)
-        TrunErrRight = 1.0 - sum(vr[p[inds_new]]) / sum(vr)
-        vr = vr[p[inds_new]]
-        Ur = Ur[:, p[inds_new]]
-        Ur = reshape(Ur, (D, D, D_new))
-        Ur, TrunErrRight
-    end
-end
-
-function hotrg(T, Dcut, ::Val{M})
-    lnZ = 0.0
-    Us = Matrix{Float64}[]
-    for k in 1:M
-        Ul, TrunErrLeft = gauge(T, Dcut, 'l')
-        Ur, TrunErrRight = gauge(T, Dcut, 'r')
-        U = TrunErrLeft < TrunErrRight ? Ul : Ur
-        push!(Us, reshape(U, :, size(U, 3)))
-        @tensoropt T[z, y, w, x] := T[o, b, x, a] * U[a, A, z] * T[y, B, o, A] * U[b, B, w]
-        f = norm(T)
-        lnZ += log(f) / (2 ^ k)
-        T /= f
-    end
-    sum = 0.0
-    for x in 1:size(T, 1), y in 1:size(T, 2)
-        sum += T[x, y, x, y]
-    end
-    lnZ += log(sum) / (2 ^ M)
-    lnZ, ntuple(i -> Us[i], Val(M))
-end
-
 function hosrg(T, D, Us::Tuple)
     lnZ = 0.0
     for k in 1:M
         U = reshape(Us[k], D, D, :)
-        @tensoropt T[w,x,z,y] := T[x,a,o,b] * U[a,A,z] * T[o,A,y,B] * U[b,B,w]
+        @tensoropt T[z, y, w, x] := T[o, b, x, a] * U[a, A, z] * T[y, B, o, A] * U[b, B, w]
         f = norm(T)
         lnZ += log(f) / (2 ^ k)
         T /= f
@@ -113,12 +58,11 @@ function main(::Val{M}) where M
     Ud = randn(D, D_max)
     U, S, V = svd(Ud)
     Ud .= U * V'
-    temp1 = Ud' * reshape(T, D, D ^ 3)
-    temp2 = Ud' * reshape(transpose(temp1), D, D ^ 2 * D_max)
-    temp3 = Ud' * reshape(transpose(temp2), D, D * D_max ^ 2)
-    temp4 = Ud' * reshape(transpose(temp3), D, D_max ^ 3)
-    lnZ, Us = hotrg(reshape(Array(temp4), D_max, D_max, D_max, D_max), D_max, Val(M))
-    println("HOTRG: ", lnZ)
+    Us = ntuple(Val(M)) do k
+        Uk = randn(D_max ^ 2, D_max)
+        U, S, V = svd(Uk)
+        U * V'
+    end
     for i in 1:N_sweep
         lnZ, (dUd, dUs...) = withgradient(Ud, Us...) do Ud, Us...
             temp1 = Ud' * reshape(T, D, D ^ 3)
