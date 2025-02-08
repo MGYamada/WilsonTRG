@@ -12,20 +12,18 @@ function polar2g(ζ, φ, χ)
     [α -conj(β); β conj(α)]
 end
 
-function gauge(T, Dcut, s)
+function gauge(T, D_cut, s)
     if s == 'l'
         M_l = ein"(zbxa, wbxc), (yβwγ, yβzα) -> aαcγ"(T, T, T, T)
         D = size(M_l, 1)
         M_l = reshape(M_l, (D ^ 2, D ^ 2))
         M_l = (M_l + M_l') / 2
 
-        vl, Ul = eigen(M_l)
-        D_new = min(D ^ 2, Dcut)
+        vl, Ul = eigen(M_l; sortby = x -> -x)
+        D_new = min(D ^ 2, D_cut)
         inds_new = collect(1:D_new)
-        p = sortperm(vl, rev = true)
-        TrunErrLeft = 1.0 - sum(vl[p[inds_new]]) / sum(vl)
-        vl = vl[p[inds_new]]
-        Ul = Ul[:, p[inds_new]]
+        TrunErrLeft = 1.0 - sum(vl[inds_new]) / sum(vl)
+        Ul = Ul[:, inds_new]
         Ul = reshape(Ul, (D, D, D_new))
         Ul, TrunErrLeft
     elseif s == 'r'
@@ -34,13 +32,11 @@ function gauge(T, Dcut, s)
         M_r = reshape(M_r, (D ^ 2, D ^ 2))
         M_r = (M_r + M_r') / 2
 
-        vr, Ur = eigen(M_r)
-        D_new = min(D ^ 2, Dcut)
+        vr, Ur = eigen(M_r; sortby = x -> -x)
+        D_new = min(D ^ 2, D_cut)
         inds_new = collect(1:D_new)
-        p = sortperm(vr, rev = true)
-        TrunErrRight = 1.0 - sum(vr[p[inds_new]]) / sum(vr)
-        vr = vr[p[inds_new]]
-        Ur = Ur[:, p[inds_new]]
+        TrunErrRight = 1.0 - sum(vr[inds_new]) / sum(vr)
+        Ur = Ur[:, inds_new]
         Ur = reshape(Ur, (D, D, D_new))
         Ur, TrunErrRight
     end
