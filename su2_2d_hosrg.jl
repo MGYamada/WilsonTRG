@@ -99,35 +99,40 @@ function main(::Val{M}) where M
     for k in 1:k_max
         Tk = SparseArray{Float64}(undef, k, k, k, k, k, k, k, k)
         for a in 1:k, b in 1:k, c in 1:k, d in 1:k
-            Tk[a, d, a, b, b, c, d, c] = 1.0
+            Tk[a, d, b, a, c, b, d, c] = 1.0
         end
         k² = k ^ 2
         range = (k_begin + 1):(k_begin + k²)
-        T[range, range, range, range] .= (λk[k] ^ 2 / k) .* reshape(Tk, k², k², k², k²)
+        T[range, range, range, range] .= (λk[k] / k²) .* reshape(Tk, k², k², k², k²)
         k_begin += k²
     end
     @tensor ρ[a, b] := T[a, i, j, k] * T[b, i, j, k]
     ρ = (ρ + ρ') / 2
-
     _, vec = eigen(ρ; sortby = x -> -x)
-    Ud = vec[:, 1:D_max]
-    temp1 = Ud' * reshape(T, D, D ^ 3)
-    temp2 = Ud' * reshape(transpose(temp1), D, D ^ 2 * D_max)
-    temp3 = Ud' * reshape(transpose(temp2), D, D * D_max ^ 2)
-    temp4 = Ud' * reshape(transpose(temp3), D, D_max ^ 3)
+    Ux = vec[:, 1:D_max]
+    @tensor ρ[a, b] := T[i, a, j, k] * T[i, b, j, k]
+    ρ = (ρ + ρ') / 2
+    _, vec = eigen(ρ; sortby = x -> -x)
+    Uy = vec[:, 1:D_max]
+    temp1 = Ux' * reshape(T, D, D ^ 3)
+    temp2 = Uy' * reshape(transpose(temp1), D, D ^ 2 * D_max)
+    temp3 = Ux' * reshape(transpose(temp2), D, D * D_max ^ 2)
+    temp4 = Uy' * reshape(transpose(temp3), D, D_max ^ 3)
     lnZ, Us = hotrg(reshape(Array(temp4), D_max, D_max, D_max, D_max), D_max, Val(M))
     println("HOTRG: ", lnZ)
     for i in 1:N_sweep
-        lnZ, (dUd, dUs...) = withgradient(Ud, Us...) do Ud, Us...
-            temp1 = Ud' * reshape(T, D, D ^ 3)
-            temp2 = Ud' * reshape(transpose(temp1), D, D ^ 2 * D_max)
-            temp3 = Ud' * reshape(transpose(temp2), D, D * D_max ^ 2)
-            temp4 = Ud' * reshape(transpose(temp3), D, D_max ^ 3)
+        lnZ, (dUx, dUy, dUs...) = withgradient(Ux, Uy, Us...) do Ux, Uy, Us...
+            temp1 = Ux' * reshape(T, D, D ^ 3)
+            temp2 = Uy' * reshape(transpose(temp1), D, D ^ 2 * D_max)
+            temp3 = Ux' * reshape(transpose(temp2), D, D * D_max ^ 2)
+            temp4 = Uy' * reshape(transpose(temp3), D, D_max ^ 3)
             hosrg(reshape(Array(temp4), D_max, D_max, D_max, D_max), D_max, Us)
         end
         println("HOSRG(", i, "): ", lnZ)
-        U, S, V = svd(dUd)
-        Ud .= U * V'
+        U, S, V = svd(dUx)
+        Ux .= U * V'
+        U, S, V = svd(dUy)
+        Uy .= U * V'
         for i in 1:M
             U, S, V = svd(dUs[i])
             Us[i] .= U * V'

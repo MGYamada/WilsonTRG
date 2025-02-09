@@ -75,11 +75,11 @@ function main()
     for k in 1:k_max
         Tk = zeros(k, k, k, k, k, k, k, k)
         for a in 1:k, b in 1:k, c in 1:k, d in 1:k
-            Tk[a, d, a, b, b, c, d, c] = 1.0
+            Tk[a, d, b, a, c, b, d, c] = 1.0
         end
         k² = k ^ 2
         range = (k_begin + 1):(k_begin + k²)
-        T[range, range, range, range] .= (λk[k] ^ 2 / k) .* reshape(Tk, k², k², k², k²)
+        T[range, range, range, range] .= (λk[k] / k²) .* reshape(Tk, k², k², k², k²)
         k_begin += k²
     end
     println(hotrg(T, D, 20))
