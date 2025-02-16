@@ -19,7 +19,7 @@ end
 
 function gauge(T, D_cut, s)
     if s == 'l'
-        @tensor M_l[a, A, e, E] := (T[o, b, c, x, a, d] * T[p, b, c, x, e, d]) * (T[y, B, C, o, A, D] * T[y, B, C, p, E, D])
+        @tensoropt M_l[a, A, e, E] := T[o, b, c, x, a, d] * T[p, b, c, x, e, d] * T[y, B, C, o, A, D] * T[y, B, C, p, E, D]
         D = size(M_l, 1)
         M_l = reshape(M_l, (D ^ 2, D ^ 2))
         M_l = (M_l + M_l') / 2
@@ -32,7 +32,7 @@ function gauge(T, D_cut, s)
         Ul = reshape(Ul, (D, D, D_new))
         Ul, TrunErrLeft
     elseif s == 'r'
-        @tensor M_r[b, B, e, E] := (T[o, b, c, x, a, d] * T[p, e, c, x, a, d]) * (T[y, B, C, o, A, D] * T[y, E, C, p, A, D])
+        @tensoropt M_r[b, B, e, E] := T[o, b, c, x, a, d] * T[p, e, c, x, a, d] * T[y, B, C, o, A, D] * T[y, E, C, p, A, D]
         D = size(M_r, 1)
         M_r = reshape(M_r, (D ^ 2, D ^ 2))
         M_r = (M_r + M_r') / 2
@@ -73,7 +73,7 @@ function gauge(T, D_cut, s)
     end
 end
 
-function hotrg(T, D, ::Val{M})
+function hotrg(T, D, ::Val{M}) where M
     lnZ = 0.0
     Us = Matrix{Float64}[]
     for k in 1:M
@@ -81,9 +81,11 @@ function hotrg(T, D, ::Val{M})
         Ur, TrunErrRight = gauge(T, D, 'r')
         Ud, TrunErrDown = gauge(T, D, 'd')
         Uu, TrunErrUp = gauge(T, D, 'u')
-        U = [Ul, Ur, Ud, Uu][argmin([TrunErrLeft, TrunErrRight, TrunErrDown, TrunErrUp])]
-        push!(Us, reshape(U, :, size(U, 3)))
-        @tensoropt T[z, j, y, w, i, x] := T[o, b, c, x, a, d] * U[a, A, z] * T[y, B, C, o, A, D] * U[b, B, w] * U[c, C, i] * U[d, D, j]
+        Ulr = TrunErrLeft < TrunErrRight ? Ul : Ur
+        Udu = TrunErrDown < TrunErrUp ? Ud : Uu
+        push!(Us, reshape(Ulr, :, size(Ulr, 3)))
+        push!(Us, reshape(Udu, :, size(Udu, 3)))
+        @tensoropt T[z, j, y, w, i, x] := T[o, b, c, x, a, d] * Ulr[a, A, z] * T[y, B, C, o, A, D] * Ulr[b, B, w] * Udu[c, C, i] * Udu[d, D, j] # fix later
         f = norm(T)
         lnZ += log(f) / (2 ^ k)
         T /= f
@@ -93,14 +95,15 @@ function hotrg(T, D, ::Val{M})
         sum += T[x, y, z, x, y, z]
     end
     lnZ += log(sum) / (2 ^ M)
-    lnZ, ntuple(i -> Us[i], Val(M))
+    lnZ, ntuple(i -> Us[i], Val(2M))
 end
 
-function hosrg(T, D, Us::NTuple{M, Matrix{Float64}})
+function hosrg(T, D, Us::NTuple{M2, Matrix{Float64}}) where M2
     lnZ = 0.0
     for k in 1:M
-        U = reshape(Us[k], D, D, :)
-        @tensoropt T[z, j, y, w, i, x] := T[o, b, c, x, a, d] * U[a, A, z] * T[y, B, C, o, A, D] * U[b, B, w] * U[c, C, i] * U[d, D, j]
+        Ulr = reshape(Us[2k - 1], D, D, :)
+        Udu = reshape(Us[2k], D, D, :)
+        @tensoropt T[z, j, y, w, i, x] := T[o, b, c, x, a, d] * Ulr[a, A, z] * T[y, B, C, o, A, D] * Ulr[b, B, w] * Udu[c, C, i] * Udu[d, D, j] # fix later
         f = norm(T)
         lnZ += log(f) / (2 ^ k)
         T /= f
