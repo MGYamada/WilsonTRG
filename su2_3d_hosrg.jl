@@ -4,6 +4,7 @@ using HCubature
 using TensorOperations
 using SparseArrayKit
 using Zygote
+using SpecialFunctions
 
 # SU(2) only
 const β = 1.0
@@ -135,14 +136,7 @@ end
 
 function main()
     k_max = box_max + 1
-    fk = Float64[]
-    for k in 1:k_max
-        res, = hcubature(zeros(3), [π / 2, 2π, 2π]) do x
-            U = polar2g(x...)
-            (1 / (2 * (π ^ 2))) * sin(x[1]) * cos(x[1]) * exp(-(β / 2) * real(tr(I - U))) * sin(k * x[2]) / sin(x[2])
-        end
-        push!(fk, res)
-    end
+    fk = [2k * exp(-β) * besseli(k, β) / β for k in 1:k_max]
     reps = [SUNIrrep(i, 0) for i in 0:box_max]
     indices = NTuple{5, SUNIrrep{2}}[]
     for r1 in reps, r2 in reps, r3 in reps, r4 in reps

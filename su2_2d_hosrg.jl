@@ -3,6 +3,7 @@ using HCubature
 using TensorOperations
 using SparseArrayKit
 using Zygote
+using SpecialFunctions
 
 # SU(2) only
 const β = 1.0
@@ -85,14 +86,7 @@ function hosrg(T, D, Us::NTuple{M, Matrix{Float64}})
 end
 
 function main(::Val{M}) where M
-    λk = Float64[]
-    for k in 1:k_max
-        res, = hcubature(zeros(3), [π / 2, 2π, 2π]) do x
-            U = polar2g(x...)
-            (1 / (2 * (π ^ 2))) * sin(x[1]) * cos(x[1]) * exp(-(β / 2) * real(tr(I - U))) * sin(k * x[2]) / sin(x[2])
-        end
-        push!(λk, (1 / k) * res)
-    end
+    λk = [2 * exp(-β) * besseli(k, β) / β for k in 1:k_max]
     D = sum(k ^ 2 for k in 1:k_max)
     T = SparseArray{Float64}(undef, D, D, D, D)
     k_begin = 0
